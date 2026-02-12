@@ -77,18 +77,29 @@ function alloc_ptr!(b::ResizeBuffer, sz::Int)::Ptr{Cvoid}
 
     # grow the buffer - only available if empty
     if iszero(old_offset) & (b.max_offset > b.buf_len)
-        free(b.buf)
-        b.buf = malloc(b.max_offset)
-        b.buf_len = b.max_offset
+        resize_buffer!(b)
     end
 
-    if b.offset ≤ b.buf_len     # use the buffer if there is enough space
-        ptr = b.buf + old_offset
-    else                        # manually allocate if not
-        ptr = malloc(sz)
-        push!(b.overflow, ptr)
+    return if b.offset ≤ b.buf_len
+        # use the buffer if there is enough space
+        b.buf + old_offset
+    else
+        # add to overflow if not
+        add_new_overflow!(b, sz)
     end
+end
 
+# Note: @noinline is used here to keep the "happy path" in alloc_ptr! smaller,
+# which might lead to more optimized code. Preliminary testing seems to indicate this is true
+@noinline function resize_buffer!(b::ResizeBuffer)
+    free(b.buf)
+    b.buf = malloc(b.max_offset)
+    b.buf_len = b.max_offset
+    return b
+end
+@noinline function add_new_overflow!(b::ResizeBuffer, sz::Int)
+    ptr = malloc(sz)
+    push!(b.overflow, ptr)
     return ptr
 end
 
