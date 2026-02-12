@@ -13,10 +13,14 @@ import Bumper.Internals: malloc, free
 const default_max_size = 1_048_576
 
 """
-    ResizeBuffer{StorageType}
+    ResizeBuffer
 
-This is a simple bump allocator that could be used to store a fixed amount of memory of type
-`StorageType`, so long as `::StorageType` supports `pointer`, and `sizeof`.
+This is an adaptive bump allocator that is oriented towards workflows that repeatedly perform a similar operation,
+for which it is a priori not easy to determine how much memory is needed.
+It stores both a buffer that will be used for allocations as long as its capacity is not exceeded,
+as well as allowing for overflow whenever the requested memory exceeds the capacity size.
+Upon fully resetting the `ResizeBuffer`, it will adaptively resize to avoid having to overflow if the same operation
+is carried out again.
 
 Do not manually manipulate the fields of a `ResizeBuffer` that is in use.
 """
@@ -38,6 +42,14 @@ mutable struct ResizeBuffer
         return resizebuf
     end
 end
+
+@doc """
+    ResizeBuffer(max_size = $default_max_size; finalize::Bool = true)
+
+Create an adaptive bump allocator where the initial size is given by `max_size`.
+If you set the `finalize` keyword argument to `false`, then you will need to explicitly
+call `Bumper.free(buf)` when you are done with the `ResizeBuffer`. This is not recommended.
+""" ResizeBuffer
 
 function free(buf::ResizeBuffer)
     foreach(free, buf.overflow)
